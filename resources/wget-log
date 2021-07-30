@@ -1,0 +1,11 @@
+--2021-07-30 13:30:06--  https://d2779tscntxxsw.cloudfront.net/Grappling-Logo-Overlay.jpg?width=1080
+Resolving d2779tscntxxsw.cloudfront.net (d2779tscntxxsw.cloudfront.net)... 65.8.132.47, 65.8.132.28, 65.8.132.87, ...
+Connecting to d2779tscntxxsw.cloudfront.net (d2779tscntxxsw.cloudfront.net)|65.8.132.47|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [image/jpeg]
+Saving to: 'Grappling-Logo-Overlay.jpg?width=1080’
+
+Grappling-Logo-Overlay.jpg?width=1080                  [<=>                                                                                                            ]       0  --.-KB/s               Grappling-Logo-Overlay.jpg?width=1080                  [ <=>                                                                                                           ]  48.85K   134KB/s               Grappling-Logo-Overlay.jpg?width=1080                  [  <=>                                                                                                          ] 121.32K   212KB/s               Grappling-Logo-Overlay.jpg?width=1080                  [   <=>                                                                                                         ] 214.63K   289KB/s    in 0.7s    
+
+2021-07-30 13:30:08 (289 KB/s) - 'Grappling-Logo-Overlay.jpg?width=1080’ saved [219783]
+

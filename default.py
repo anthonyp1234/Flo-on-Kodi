@@ -1,24 +1,27 @@
-import sys, xbmcgui, xbmcplugin, xbmcaddon
+import sys, xbmcgui, xbmcplugin, xbmcaddon, xbmcvfs
 import os, requests, re, json
 from urllib.parse import urlencode, quote_plus, parse_qsl, quote, unquote
 
 import pickle
 import random
-#import time
+import time
+
+
 
 addon           = xbmcaddon.Addon(id='plugin.video.flo')
 addon_url       = sys.argv[0]
 addon_handle    = int(sys.argv[1])
 addon_icon      = addon.getAddonInfo('icon')
-addon_BASE_PATH = xbmc.translatePath(xbmcaddon.Addon().getAddonInfo('profile'))
+addon_BASE_PATH = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo('profile'))
 
-TOKEN_FILE = xbmc.translatePath(os.path.join('special://temp','flo_token_data.txt'))
+TOKEN_FILE = xbmcvfs.translatePath(os.path.join('special://temp','flo_token_data.txt'))
 
-PICTURE_FILES =  os.path.join(addon.getAddonInfo('path'),"resources", "pictures") #.decode('utf-8') ,"resources", "pictures")
+#PICTURE_FILES =  os.path.join(addon.getAddonInfo('path'),"resources", "pictures") #.decode('utf-8') ,"resources", "pictures")
 
 DASH = False  ### If true use dash, otherwise use hls
 
-#MONTH = 2678400 ##How much to remove to go back a month in unix time
+MONTH = 2678400 ##How much to remove to go back a month in unix time
+
 
 
 urls = {
@@ -47,7 +50,7 @@ play_live_header = {
     'dnt': '1',
     'origin': 'https://www.flograppling.com',
     'referer': 'https://www.flograppling.com/',
-    #'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+    'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"', # put this back now 29/07/2021
     'sec-ch-ua-mobile': '?0',
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
@@ -57,6 +60,18 @@ play_live_header = {
     }
 
 
+##remove this after debug
+def kodi_print(text_to_print):
+    """print to kodi.log the line lnumber and the text"""
+    
+    if not isinstance(text_to_print, str):
+        text_to_print = str(text_to_print)
+
+    xbmc.log("{0}".format(text_to_print),level=xbmc.LOGERROR)
+    return
+
+
+
 def get_creds():
     """Get username and password. Return dict of username and password"""
 
@@ -64,13 +79,12 @@ def get_creds():
         return None
 
     return {
-        'email': addon.getSetting('username'),  
+        'email': addon.getSetting('username'),
         'password': addon.getSetting('password')
     }
 
 def get_auth_token():
     """Take in the credentials as dict['email', 'password'] and return the Auth token as string with the bearer keyword ready to be used in the header"""
-    
     credentials = json.dumps(get_creds())
 
     session = requests.Session()
@@ -82,17 +96,14 @@ def get_auth_token():
         #token  = {"jwt_token" :info_dict["token"], "jwt_refresh_token": info_dict["refresh_token_exp"], "ajs_user_id" :info_dict["user"]["id"]}
         token = {"jwt_token" :info_dict["token"]}
         return token
-        
     else:
-
-        xbmc.log("Could not get Auth Token, Session text: {0}".format(str(session.json())),level=xbmc.LOGERROR)
+        kodi_print("could no get auth token: " + session.json())
+        #xbmc.log("Could not get Auth Token, Session text: {0}".format(str(session.json())),level=xbmc.LOGERROR)
         return False
 
 
 def get_token():
     """Get the token either from the file saved or by getting a new one if the file doesn't exist"""
-    
-    xbmc.log("pickle path is is: {0}".format(str(TOKEN_FILE)),level=xbmc.LOGERROR)
     
     if not os.path.isfile(TOKEN_FILE): #if bearer token file does not exist
         token = get_auth_token()
@@ -100,13 +111,10 @@ def get_token():
         with open(TOKEN_FILE, 'wb') as handle:
             pickle.dump(token, handle, protocol=pickle.HIGHEST_PROTOCOL)
             ## Replace by above pickle.dump(open(TOKEN_FILE, mode='wb'))  ###THIS was added new, not sure why this wasn't here before?
-        
     else:
         with open(TOKEN_FILE, 'rb') as handle:
             token = pickle.load(handle)
-    
         ## replaced by above token = pickle.load(open(TOKEN_FILE), mode='rb')
-
     return token
 
 
@@ -115,59 +123,54 @@ def get_web_data(url, put_data=None, bearer_in_header=False):
     """Grab the web data from the url"""
     my_token = get_token()
     
-    xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
-    
+    #xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
+    kodi_print(url)    
+
+
     session = requests.Session()
     
     if bearer_in_header==True:
         add_headers = headers
         my_auth = "Bearer " + my_token['jwt_token']
-        add_headers['authorization'] = my_auth       
+        add_headers['authorization'] = my_auth
     else:
         add_headers = headers
     
-    
     if not put_data and not bearer_in_header:
-        response = session.get(url, headers=add_headers, cookies=my_token)  
-        xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
+        response = session.get(url, headers=add_headers, cookies=my_token)
+        kodi_print("Get Req " + url)  
+        #xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
 
     elif bearer_in_header:
-        response = session.post(url,headers=add_headers, cookies=my_token)  
+        response = session.post(url,headers=add_headers, cookies=my_token)
     else:
         response = session.post(url,headers=add_headers, cookies=my_token, data=put_data)    
 
-    
     if response.status_code < 400:
         return response.json()
     elif response.status_code == 401:  #if the token gives back unauthorized, it's old. Delete it and rerun the method
         os.remove(TOKEN_FILE)
         get_web_data(url)
     else:
-        xbmc.log("Could not get data, line 113. Response: {0}\r\nText: {1}".format(response.status_code, response.text),level=xbmc.LOGERROR)
+        kodi_print("Could not get data " + str(response.status_code) + " " + str(response.text))
+        #xbmc.log("Could not get data, line 113. Response: {0}\r\nText: {1}".format(response.status_code, response.text),level=xbmc.LOGERROR)
         return None
 
 def change_url_returned_by_home(url, my_title=None):
-    """Takes in the url supplied by the homepage returned data, and adds the correct syntax for the web API url 
-    """   
+    """Takes in the url supplied by the homepage returned data, and adds the correct syntax for the web API url"""
     my_website = None
-    
-    xbmc.log("In change url: {0}".format(url),level=xbmc.LOGERROR)
     
     if my_title == "Replays":
         return { "url" : "https://api.flograppling.com/api/events/completed?future=0", "type" : "previous"}
     
     if my_title == "Live Events":
-        
         return { "url" : "https://api.flograppling.com/api/events/today?live_only=1", "type" : "listing"}
-    
     
     #try finding collections/number
     my_pattern = "collections\/(\d+)"
     found_collections = re.search(my_pattern,url)
     if found_collections is not None:
-        #xbmc.log("\nIn change url: {0}".format(url),level=xbmc.LOGERROR)
         my_website = "https://api.flograppling.com/api/collections/{0}?page=1&limit=25&sort=recent&view=Completed".format(found_collections.group(1))
-        #xbmc.log("\nFound collection: {0}".format(my_website),level=xbmc.LOGERROR)
         return_dict =  { "url" : my_website, "type" : "collection"}
         ###Collection has one id, and needs to be drilled down on using the event ID
     
@@ -179,13 +182,9 @@ def change_url_returned_by_home(url, my_title=None):
     
     my_pattern = "^\/events$"
     found_collections = re.search(my_pattern,url)
-    if found_collections is not None:   
-        #xbmc.log("\nIn the place\nIn the place\nIn the place\nIn the place ",level=xbmc.LOGERROR)
-        my_website = "https://api.flograppling.com/api/events/timeline?page=1&limit=60&timestamp=1625119398&live_only=0&sort=ascending" 
-        #ascending
-        
-        ###Anthony looking here 19/07/2021
-        ###/api/events/timeline?page=1&limit=60&timestamp=1625119398&live_only=0&sort=ascending <--this gets what I want
+    if found_collections is not None:
+        my_time = str(round(time.time()) - MONTH) 
+        my_website = "https://api.flograppling.com/api/events/timeline?page=1&limit=60&timestamp={0}&live_only=0&sort=ascending".format(my_time) 
         return_dict =  { "url" : my_website, "type" : "listing"}     
     
     
@@ -204,7 +203,6 @@ def change_url_returned_by_home(url, my_title=None):
         my_website = "https://api.flograppling.com/api/search/?limit=25&published_only=1&type=video&category=FloFilm,Documentary&sort=recent&page=1"
         return_dict =  { "url" : my_website, "type" : "listing"}    
 
-    xbmc.log("Return Dict: {0}\n".format(return_dict),level=xbmc.LOGERROR)
     
     return return_dict
     
@@ -237,7 +235,6 @@ def build_initial_menu_data(data):
                 "type" : type_and_url['type'],
                 "title" : my_title,
                 "url" : type_and_url['url'],   
-                #"url" : my_url,   ###this may be wrong, only applicable for events?
                 'thumb': None,
                 'icon' : None ,
                 'landscape': None ,
@@ -247,7 +244,6 @@ def build_initial_menu_data(data):
                 }
                 if not my_title in skip_title: #stop duplicates, and remove unwanted
                     my_initial_menu.append(dictionary_to_add)
-                    #xbmc.log("247 Title:{0}, url {1}".format(dictionary_to_add['title'],dictionary_to_add['url']),level=xbmc.LOGERROR)
                     skip_title.append(my_title)
             
         elif section["action"]:
@@ -258,8 +254,7 @@ def build_initial_menu_data(data):
             dictionary_to_add = {
                 "type" : type_and_url['type'],
                 "title" : my_title,
-                "url" : type_and_url['url'],   
-                #"url" : my_url,   ###this may be wrong, only applicable for events?
+                "url" : type_and_url['url'],
                 'thumb': None,
                 'icon' : None ,
                 'landscape': None ,
@@ -269,34 +264,33 @@ def build_initial_menu_data(data):
             }
             if not my_title in skip_title: #stop duplicates, and remove unwanted
                 my_initial_menu.append(dictionary_to_add)
-                #xbmc.log("247 Title:{0}, url {1}".format(dictionary_to_add['title'],dictionary_to_add['url']),level=xbmc.LOGERROR)
                 skip_title.append(my_title)
-               
-        
-    
+
     return my_initial_menu
 
 def get_initial_images():
     """Get images from the local directory to build some backgrounds for the home landing page """
-    pass
+    my_homepage_pics = []
+    home_url = "https://api.flograppling.com/api/experiences/web/home?version=1.2.3&limit=20&offset=0&site_id=8"
+    data = get_web_data(home_url)
+    
+    for item in data['sections']:
+        try:
+            for meta_item in item['items']:
+                my_homepage_pics.append(meta_item['asset']['url'])
+        except:
+            pass
+    return my_homepage_pics
     
 def build_initial_menu():
     """Builds the initial menus for FLOGrappling"""
-    
     ###Grab some random pictures from the resources directory
     my_pictures = get_initial_images()
-    
     ##Get the web data from the homepage
     data = get_web_data(urls["home"]) 
-    
     menu_data = build_initial_menu_data(data)
-    
-
-    #xbmc.log("\n\nDict contains: {0}\n\n".format(str(item)),level=xbmc.LOGERROR)
-
 
     for item in menu_data:
-        #xbmc.log("\nTitle{0}, url {1}".format(item["title"],item["url"]),level=xbmc.LOGERROR)
         kodi_item = xbmcgui.ListItem(label=item['title'])
         info_label = {
                         'title' : item["title"].capitalize()
@@ -319,19 +313,10 @@ def build_initial_menu():
     url = '{0}?action=search'.format(addon_url)
     xbmcplugin.addDirectoryItem(addon_handle, url, kodi_item, True ) ###last false is if it is a directory
 
-
     ##create the initial Menu
     xbmcplugin.endOfDirectory(addon_handle)
 
 
-def get_initial_images():
-    """Get a bunch of images for initial build menu"""
-    
-    files = [file for file in os.listdir(PICTURE_FILES) if not os.path.isdir(file)]
-    
-    return files    
-
-##
 def sort_data_from_dict(item):
     """Create a list of events from the home menu after selecting events. ...Not sure how generalisable this will be"""
     event_data = {
@@ -347,22 +332,19 @@ def sort_data_from_dict(item):
 def sort_data_from_list(event_data):
     """After Searching for events and selecting an event id, parse the data to output dict with playlist, title and url for 
     pic"""
-
     my_playable_items = []
     
     if not isinstance(event_data, list):
         event_data = [event_data]
     
-    #xbmc.log("\n323Item is: {0}".format(event_data),level=xbmc.LOGERROR)
     for item in event_data:
-        
-        #xbmc.log("\nItem is: {0}".format(item),level=xbmc.LOGERROR)
+        #kodi_print(str(item))
         if item['type']  == "video": 
             my_item = {
                 "title" : item["title"],
                 "playlist": item["playlist"],
                 "type" : item["type"],
-                #'preview_text' : item['preview_text'],
+                'description' : item['seo_description'],
                 "picture" : item["asset_url"]
             }
             my_playable_items.append(my_item)
@@ -388,31 +370,21 @@ def sort_data_from_list(event_data):
                     'preview_text' : "LIVE: " + item['preview_text'],
                     "description" : "LIVE: " + item['seo_description']
                 }                
-                
                 my_playable_items.append(my_item)
-            
 
     return my_playable_items
-
-
 
 
 def build_menu(itemData):     
     """ Takes in array of dict, using this array builds a menu to display in Kodi"""
     
-    
-    #xbmc.log("\n\Item data is: {0}".format(str(itemData)),level=xbmc.LOGERROR)
-    
     if type(itemData) is not list:
         itemData = [itemData]
     
-    
     for my_item in itemData:
         
-        xbmc.log("\nItem is: {0}".format(str(my_item)),level=xbmc.LOGERROR)
         
         if my_item["type"] == "video":
-            xbmc.log("\nThinks it's video\n\n\n",level=xbmc.LOGERROR)
             kodi_item = xbmcgui.ListItem(label=my_item["title"],label2=my_item["title"])
             kodi_item.setArt({  'thumb': my_item["picture"], 
                                 'icon' :  my_item["picture"], 
@@ -436,12 +408,8 @@ def build_menu(itemData):
             url = '{0}?action=play&i={1}&t={2}'.format(addon_url, my_item["playlist"], quote_plus(my_item["title"].encode('utf8'))) ##added encode utf
             xbmcplugin.addDirectoryItem(addon_handle, url, kodi_item, isFolder=False, totalItems=len(itemData)) ###last false is if it is a directory
         
-        
-        
-        
         else:
             kodi_item = xbmcgui.ListItem(label=my_item["title"],label2=my_item["title"])
-
             kodi_item.setArt({  'thumb': my_item["picture"], 
                                 'icon' :  my_item["picture"], 
                                 'landscape': my_item["picture"], 
@@ -449,7 +417,6 @@ def build_menu(itemData):
                                 'banner': my_item["picture"], 
                                 'fanart': my_item["picture"]})
 
-            #url_for_getting_data = playlist_url.format(my_item["id"]) don't need this just need event id
             url = '{0}?action={2}&u={1}&t={2}'.format(addon_url, my_item['id'], my_item['type'])
             xbmcplugin.addDirectoryItem(addon_handle, url, kodi_item, isFolder=True, totalItems=len(itemData)) ###last false is if it is a directory 
 
@@ -473,11 +440,9 @@ def play_hls_video(m38u_url, v_title):
     playitem.setProperty('isFolder', 'false')
     playitem.setProperty('IsPlayable', 'true')
        ###This is needed for kodi 19>
-      
     playitem.setProperty('inputstream.adaptive.stream_headers', my_encoding )  
-
     
-    xbmc.log("Stream addr is: {0}".format(str(m38u_url)),level=xbmc.LOGERROR)
+    kodi_print("Stream Address is: {0}".format(str(m38u_url))) 
     #xbmc.Player().play(stream  ,  playitem)    #### added + "|" + my_encoding
     
     xbmcplugin.setResolvedUrl(addon_handle, True, playitem)
@@ -487,7 +452,6 @@ def get_data_for_collection(url):
     """Takes in the Id and Grabs the list of videos to populate the menu"""
     data_from_request = get_web_data(url)['data']
     
-    #xbmc.log("\collection is: {0}".format(data_from_request),level=xbmc.LOGERROR)
     
     if data_from_request['node_associations']:  ##Return the list inside the collection
         return data_from_request['node_associations']
@@ -504,7 +468,7 @@ def get_data_for_collection(url):
         xbmc.log("\n\n\nmy id not in vars\n\n\n",level=xbmc.LOGERROR)
         
     url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=25&page=1)".format(my_id)
-    type = "listing"
+    #type = "listing"
     
     my_video_list = get_web_data(url)['data']
     
@@ -517,7 +481,7 @@ def get_data_for_event(url):
     my_id = data_from_request['id']
     
     url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=25&page=1)".format(my_id)
-    type = "listing"
+    #type = "listing"
     
     my_video_list = get_web_data(url)['data']
     
