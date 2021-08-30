@@ -328,13 +328,15 @@ def sort_data_from_list(event_data):
     
     for item in event_data:
         #kodi_print(str(item))
-        if item['type']  == "video": 
+        if item['type']  == "video":
+            #kodi_print(item['duration'])
             my_item = {
                 "title" : item["title"],
                 "playlist": item["playlist"],
                 "type" : item["type"],
                 'description' : item['seo_description'],
-                "picture" : item["asset_url"]
+                "picture" : item["asset_url"],
+                'duration' : item.get('duration')
             }
             my_playable_items.append(my_item)
         
