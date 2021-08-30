@@ -1,12 +1,9 @@
 import sys, xbmcgui, xbmcplugin, xbmcaddon, xbmcvfs
 import os, requests, re, json
 from urllib.parse import urlencode, quote_plus, parse_qsl, quote, unquote
-
 import pickle
 import random
 import time
-
-
 
 addon           = xbmcaddon.Addon(id='plugin.video.flo')
 addon_url       = sys.argv[0]
@@ -15,20 +12,12 @@ addon_icon      = addon.getAddonInfo('icon')
 addon_BASE_PATH = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo('profile'))
 
 TOKEN_FILE = xbmcvfs.translatePath(os.path.join('special://temp','flo_token_data.txt'))
-
-#PICTURE_FILES =  os.path.join(addon.getAddonInfo('path'),"resources", "pictures") #.decode('utf-8') ,"resources", "pictures")
-
-DASH = False  ### If true use dash, otherwise use hls
-
 MONTH = 2678400 ##How much to remove to go back a month in unix time
 
 
-
 urls = {
-        "website_base" : "https://www.flograppling.com",
         "home" : "https://api.flograppling.com/api/experiences/web/home?version=1.2.3&limit=20&offset=0&site_id=8",
-        "login_address" : "https://api.flograppling.com/api/tokens"
-        
+        "login_address" : "https://api.flograppling.com/api/tokens"   
         }
 
 headers = {
@@ -71,7 +60,6 @@ def kodi_print(text_to_print):
     return
 
 
-
 def get_creds():
     """Get username and password. Return dict of username and password"""
 
@@ -82,6 +70,7 @@ def get_creds():
         'email': addon.getSetting('username'),
         'password': addon.getSetting('password')
     }
+
 
 def get_auth_token():
     """Take in the credentials as dict['email', 'password'] and return the Auth token as string with the bearer keyword ready to be used in the header"""
@@ -98,7 +87,7 @@ def get_auth_token():
         return token
     else:
         kodi_print("could no get auth token: " + session.json())
-        #xbmc.log("Could not get Auth Token, Session text: {0}".format(str(session.json())),level=xbmc.LOGERROR)
+
         return False
 
 
@@ -121,12 +110,8 @@ def get_token():
 
 def get_web_data(url, put_data=None, bearer_in_header=False):
     """Grab the web data from the url"""
-    my_token = get_token()
-    
-    #xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
-    kodi_print(url)    
-
-
+    my_token = get_token()   
+    #kodi_print(url)    
     session = requests.Session()
     
     if bearer_in_header==True:
@@ -138,8 +123,8 @@ def get_web_data(url, put_data=None, bearer_in_header=False):
     
     if not put_data and not bearer_in_header:
         response = session.get(url, headers=add_headers, cookies=my_token)
-        kodi_print("Get Req " + url)  
-        #xbmc.log("116;URL Get req {0}\r\n".format(str(url)),level=xbmc.LOGERROR)
+        #kodi_print("Get Req " + url)  
+
 
     elif bearer_in_header:
         response = session.post(url,headers=add_headers, cookies=my_token)
@@ -153,7 +138,6 @@ def get_web_data(url, put_data=None, bearer_in_header=False):
         get_web_data(url)
     else:
         kodi_print("Could not get data " + str(response.status_code) + " " + str(response.text))
-        #xbmc.log("Could not get data, line 113. Response: {0}\r\nText: {1}".format(response.status_code, response.text),level=xbmc.LOGERROR)
         return None
 
 def change_url_returned_by_home(url, my_title=None):
@@ -170,7 +154,7 @@ def change_url_returned_by_home(url, my_title=None):
     my_pattern = "collections\/(\d+)"
     found_collections = re.search(my_pattern,url)
     if found_collections is not None:
-        my_website = "https://api.flograppling.com/api/collections/{0}?page=1&limit=25&sort=recent&view=Completed".format(found_collections.group(1))
+        my_website = "https://api.flograppling.com/api/collections/{0}?page=1&limit=100&sort=recent&view=Completed".format(found_collections.group(1))
         return_dict =  { "url" : my_website, "type" : "collection"}
         ###Collection has one id, and needs to be drilled down on using the event ID
     
@@ -184,23 +168,23 @@ def change_url_returned_by_home(url, my_title=None):
     found_collections = re.search(my_pattern,url)
     if found_collections is not None:
         my_time = str(round(time.time()) - MONTH) 
-        my_website = "https://api.flograppling.com/api/events/timeline?page=1&limit=60&timestamp={0}&live_only=0&sort=ascending".format(my_time) 
+        my_website = "https://api.flograppling.com/api/events/timeline?page=1&limit=100&timestamp={0}&live_only=0&sort=ascending".format(my_time) 
         return_dict =  { "url" : my_website, "type" : "listing"}     
     
     
     my_pattern = "training$"
     found_collections = re.search(my_pattern,url)
-    if found_collections is not None:   
+    if found_collections is not None:
         
-        my_website = "https://api.flograppling.com/api/search/?limit=25&published_only=1&sort=recent&type=video&category=Training"
+        my_website = "https://api.flograppling.com/api/search/?limit=100&published_only=1&sort=recent&type=video&category=Training"
         return_dict =  { "url" : my_website, "type" : "listing"}  
         
     
     my_pattern = "films$"
     found_collections = re.search(my_pattern,url)
-    if found_collections is not None:   
+    if found_collections is not None:
         
-        my_website = "https://api.flograppling.com/api/search/?limit=25&published_only=1&type=video&category=FloFilm,Documentary&sort=recent&page=1"
+        my_website = "https://api.flograppling.com/api/search/?limit=100&published_only=1&type=video&category=FloFilm,Documentary&sort=recent&page=1"
         return_dict =  { "url" : my_website, "type" : "listing"}    
 
     
@@ -271,8 +255,7 @@ def build_initial_menu_data(data):
 def get_initial_images():
     """Get images from the local directory to build some backgrounds for the home landing page """
     my_homepage_pics = []
-    home_url = "https://api.flograppling.com/api/experiences/web/home?version=1.2.3&limit=20&offset=0&site_id=8"
-    data = get_web_data(home_url)
+    data = get_web_data(urls["home"])
     
     for item in data['sections']:
         try:
@@ -309,6 +292,12 @@ def build_initial_menu():
 
     #### Add the search to the list also:
     kodi_item = xbmcgui.ListItem(label="Search")
+    kodi_item.setArt({  'thumb': random.choice(my_pictures),
+                       'icon' :  random.choice(my_pictures),
+                       'landscape': random.choice(my_pictures),
+                       'poster' : random.choice(my_pictures),
+                       'banner': random.choice(my_pictures),
+                       'fanart': random.choice(my_pictures)})
     kodi_item.setInfo(type='video', infoLabels={'title': 'Search'})
     url = '{0}?action=search'.format(addon_url)
     xbmcplugin.addDirectoryItem(addon_handle, url, kodi_item, True ) ###last false is if it is a directory
@@ -430,6 +419,8 @@ def play_hls_video(m38u_url, v_title):
     #my_encoding = urlencode(headers)
     my_encoding = urlencode(play_live_header)
 
+    #my_encoding = play_live_header
+
     playitem = xbmcgui.ListItem(path=m38u_url,label=v_title)
     playitem.setProperty('inputstream', 'inputstream.adaptive')    
 
@@ -442,10 +433,14 @@ def play_hls_video(m38u_url, v_title):
        ###This is needed for kodi 19>
     playitem.setProperty('inputstream.adaptive.stream_headers', my_encoding )  
     
-    kodi_print("Stream Address is: {0}".format(str(m38u_url))) 
-    #xbmc.Player().play(stream  ,  playitem)    #### added + "|" + my_encoding
+    #kodi_print("Stream Address is: {0}".format(str(m38u_url))) 
+    #kodi_print("Header: {0}".format(my_encoding))
+    xbmc.Player().play(m38u_url  ,  playitem)    #### added + "|" + my_encoding
     
-    xbmcplugin.setResolvedUrl(addon_handle, True, playitem)
+    #xbmcplugin.setResolvedUrl(addon_handle, True, playitem)  <--removed this added the line above, seems to work
+
+
+
 
 
 def get_data_for_collection(url):
@@ -467,7 +462,7 @@ def get_data_for_collection(url):
         my_id = data_from_request['id']
         xbmc.log("\n\n\nmy id not in vars\n\n\n",level=xbmc.LOGERROR)
         
-    url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=25&page=1)".format(my_id)
+    url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=50&page=1)".format(my_id)
     #type = "listing"
     
     my_video_list = get_web_data(url)['data']
@@ -480,17 +475,13 @@ def get_data_for_event(url):
     data_from_request = get_web_data(url)['data']
     my_id = data_from_request['id']
     
-    url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=25&page=1)".format(my_id)
+    url = "https://api.flograppling.com/api/search/events/{0}/videos?limit=50&page=1)".format(my_id)
     #type = "listing"
     
     my_video_list = get_web_data(url)['data']
     
     return my_video_list
 
-def get_data_for_listing(url):
-
-    data_from_request = get_web_data(url)['data']
-    return data_from_request
 
 def get_live_m38u(stream_id):
 
@@ -527,7 +518,7 @@ def router(paramstring):
             #menu_data=global_categoriser(params['u'],action)
             url = unquote(params['u'])
             xbmc.log("List addr is: {0}".format(url),level=xbmc.LOGERROR)
-            data = get_data_for_listing(url)  
+            data = get_web_data(url)['data']  
             sorted_data = sort_data_from_list(data)
             menu_data = sorted_data
             build_menu(menu_data)
@@ -588,7 +579,8 @@ def search(query_string):
     
     encoded_search = quote(query_string)
    
-    search_url = """https://api.flograppling.com/api/search/?limit=25&published_only=1&q={0}&page=1&sort=recent""".format(encoded_search)
+    search_url = """https://api.flograppling.com/api/search/?limit=100&published_only=0&q={0}&page=1&sort=relevant""".format(encoded_search)
+    ###Anthony Pino changed above to not published only and limit 100. Sort was recent, now relevant
     
 
     my_list = get_web_data(search_url)['data']
